@@ -349,7 +349,7 @@ with gr.Blocks(theme=theme, css=css, title="OmniVoice 多语言演示") as demo:
                     vc_audio = gr.Audio(label="合成结果", type="numpy")
                     vc_status = gr.Textbox(label="状态信息", lines=1)
                     
-                    with gr.Accordion("下载成果物", open=False):
+                    with gr.Accordion("下载内容", open=False):
                         vc_out_wav = gr.File(label="音频文件 (WAV)")
                         vc_out_custom_srt = gr.File(label="句子级字幕 (SRT)")
                         vc_out_word_srt = gr.File(label="词级字幕 (SRT)")
