@@ -260,8 +260,9 @@ def _gen_core(
     except Exception as e:
         return None, f"Error: {type(e).__name__}: {e}"
 
-    waveform = audio[0].squeeze(0).numpy()
-    waveform = (waveform * 32767).astype(np.int16)
+    # waveform = audio[0].squeeze(0).numpy()
+    # waveform = (waveform * 32767).astype(np.int16)
+    waveform = (audio[0] * 32767).astype(np.int16)
     return (sampling_rate, waveform), "Done."
 
 # ---------------------------------------------------------------------------
@@ -324,26 +325,8 @@ def _gen_settings():
 with gr.Blocks(theme=theme, css=css, title="OmniVoice Demo") as demo:
     gr.HTML("""
         <div style="text-align: center; margin: 20px auto; max-width: 800px;">
-            <h1 style="font-size: 2.5em; margin-bottom: 5px;">🎙️ OmniVoice 多语言语音合成</h1>
-            <p style="font-size: 1.2em; color: #666; margin-bottom: 15px;">支持 600 多种语言的 SOTA 语音模型，提供 <b>声音克隆</b> 与 <b>人声设计</b> 功能。</p>
-            
-            <div style="margin-bottom: 20px;">
-                <a href="https://www.youtube.com/@fm19.2?sub_confirmation=1" target="_blank" style="
-                    background: linear-gradient(90deg, #4F46E5 0%, #7C3AED 100%);
-                    color: white;
-                    padding: 10px 24px;
-                    border-radius: 50px;
-                    text-decoration: none;
-                    font-weight: bold;
-                    display: inline-flex;
-                    align-items: center;
-                    gap: 8px;
-                    box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
-                    transition: transform 0.2s ease;
-                " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                    <span>📻More Funs</span>
-                </a>
-            </div>
+            <h1 style="font-size: 2.5em; margin-bottom: 5px;">🎙️ OmniVoice Multilingual </h1>
+            <p>State-of-the-art text-to-speech model for 600+ languages, supporting Voice Clone and Voice Design.</p>
         </div>
     """)
 
