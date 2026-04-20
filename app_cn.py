@@ -244,8 +244,8 @@ def _gen_core(
     except Exception as e:
         return None, f"错误: {type(e).__name__}: {e}"
 
-    waveform = audio[0].squeeze(0).numpy()
-    waveform = (waveform * 32767).astype(np.int16)
+
+    waveform = (audio[0] * 32767).astype(np.int16)
     return (sampling_rate, waveform), "生成完毕。"
 
 # ---------------------------------------------------------------------------
