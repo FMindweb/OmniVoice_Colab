@@ -1,4 +1,3 @@
-# %cd /content/omnivoice-colab
 import os
 import sys
 import logging
@@ -8,7 +7,6 @@ from typing import Any, Dict
 import gradio as gr
 import numpy as np
 import torch
-torch.backends.cudnn.enabled = False
 import scipy.io.wavfile as wavfile
 import re
 import os
@@ -515,6 +513,146 @@ with gr.Blocks(theme=theme, css=css, title="OmniVoice 多语言演示") as demo:
 
             md_inputs = [md_text, md_lang, md_want_subs, md_ns, md_gs, md_dn, md_sp, md_du, md_pp, md_po] + role_inputs
             md_btn.click(synthesize_script, inputs=md_inputs, outputs=[md_audio, md_status, md_out_wav, md_out_srt])
+        
+        # ==============================================================
+        # 5. SRT to Speech Tab (SRT 转语音)
+        # ==============================================================
+        with gr.TabItem("SRT to Speech (字幕转语音)"):
+            gr.Markdown("上传 `.srt` 字幕文件，模型会自动提取文本，并使用你配置的声音将其转换为完整的配音音频。")
+            
+            with gr.Row():
+                with gr.Column(scale=1):
+                    gr.Markdown("### 1. 上传字幕 & 配置声音")
+                    srt_file = gr.File(label="上传 .srt 文件", file_types=[".srt"])
+                    
+                    with gr.Accordion("声音配置 (Voice Configuration)", open=True):
+                        srt_mode = gr.Radio(["Design", "Clone"], value="Design", label="声音模式 (Mode)")
+                        
+                        # Design 模式配置
+                        with gr.Group(visible=True) as srt_design_group:
+                            with gr.Row():
+                                srt_gender = gr.Dropdown(label="Gender", choices=["Auto"] + _CATEGORIES["Gender"], value="Female")
+                                srt_age = gr.Dropdown(label="Age", choices=["Auto"] + _CATEGORIES["Age"], value="Young Adult")
+                                srt_pitch = gr.Dropdown(label="Pitch", choices=["Auto"] + _CATEGORIES["Pitch"], value="Auto")
+                            with gr.Row():
+                                srt_style = gr.Dropdown(label="Style", choices=["Auto"] + _CATEGORIES["Style"], value="Auto")
+                                srt_accent = gr.Dropdown(label="Accent/Dialect", choices=["Auto"] + _CATEGORIES["Accent/Dialect"], value="Auto")
+                        
+                        # Clone 模式配置
+                        srt_ref = gr.Audio(label="上传参考克隆音频", type="filepath", visible=False, elem_classes="compact-audio")
+                        
+                        def toggle_srt_mode(m):
+                            return gr.update(visible=(m=="Design")), gr.update(visible=(m=="Clone"))
+                        srt_mode.change(toggle_srt_mode, inputs=srt_mode, outputs=[srt_design_group, srt_ref])
+                    
+                    srt_lang = _lang_dropdown()
+                    # 复用现有的高级设置
+                    srt_ns, srt_gs, srt_dn, srt_sp, srt_du, srt_pp, srt_po = _gen_settings()
+                    
+                    srt_btn = gr.Button("🚀 转换 SRT 为语音", variant="primary", size="lg")
+                    
+                with gr.Column(scale=1):
+                    gr.Markdown("### 2. 生成结果")
+                    srt_audio_out = gr.Audio(label="最终配音音频")
+                    srt_status = gr.Textbox(label="状态信息")
+                    srt_out_wav = gr.File(label="下载完整音频 (WAV)")
+                    srt_parsed_text = gr.Textbox(label="解析出的文本 (仅供核对)", lines=8)
+
+            # --- SRT 解析与生成逻辑 ---
+            def process_srt_to_speech(file_obj, lang, ns, gs, dn, sp, du, pp, po, mode, gen, age, pit, sty, acc, ref):
+                if not file_obj:
+                    return None, "请上传一个 SRT 文件。", None, ""
+                
+                # 定义一个内部辅助函数：将 SRT 的 00:00:01,500 转换成秒数
+                def srt_time_to_seconds(time_str):
+                    hrs, mins, secs = time_str.replace(',', '.').split(':')
+                    return int(hrs) * 3600 + int(mins) * 60 + float(secs)
+
+                # 1. 解析 SRT 文件，提取【开始时间】、【结束时间】和【文本】
+                try:
+                    with open(file_obj.name, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                        
+                    # 使用正则精准匹配 SRT 格式
+                    pattern = re.compile(r'(\d+)\n(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})\n(.*?)(?=\n\n|\n$|$)', re.DOTALL)
+                    matches = pattern.findall(content)
+                    
+                    srt_data = []
+                    for m in matches:
+                        # 过滤 HTML 标签并清理换行
+                        clean_text = re.sub(r'<[^>]+>', '', m[3].replace('\n', ' ').strip())
+                        if clean_text:
+                            srt_data.append({
+                                "start": srt_time_to_seconds(m[1]),
+                                "end": srt_time_to_seconds(m[2]),
+                                "text": clean_text
+                            })
+                except Exception as e:
+                    return None, f"解析 SRT 文件失败: {str(e)}", None, ""
+                
+                if not srt_data:
+                    return None, "未能从文件中提取出有效文本，请检查 SRT 格式。", None, ""
+                    
+                parsed_preview = "\n".join([x["text"] for x in srt_data])
+                
+                # 2. 准备模型指令
+                instruct = _build_instruct_str(gen, age, pit, sty, acc) if mode.lower() == "design" else None
+                audio_segments = []
+                current_audio_time = 0.0  # 用于追踪当前合成音频在时间轴上的绝对位置
+                
+                # 3. 逐句精确合成音频并对齐
+                for item in srt_data:
+                    target_start = item["start"]
+                    
+                    # 计算需要补齐的静音差值
+                    wait_duration = target_start - current_audio_time
+                    
+                    # 只有当下一句的开始时间大于当前时间时，才插入静音补齐
+                    if wait_duration > 0:
+                        silence = np.zeros(int(sampling_rate * wait_duration), dtype=np.int16)
+                        audio_segments.append(silence)
+                        current_audio_time += wait_duration
+                    
+                    # 核心生成 (完全保留了你的所有原版参数)
+                    res = _gen_core(
+                        text=item["text"], language=lang, 
+                        ref_audio=ref, instruct=instruct, 
+                        num_step=ns, guidance_scale=gs, denoise=dn, 
+                        speed=sp, duration=du, preprocess_prompt=pp, postprocess_output=po, 
+                        mode=mode.lower()
+                    )
+                    
+                    if res[0] is not None:
+                        sr, wave = res[0]
+                        audio_segments.append(wave)
+                        # 更新当前时间轴：加上刚生成这句话的真实真实长度
+                        current_audio_time += (len(wave) / sr)
+                
+                if not audio_segments:
+                    return None, "生成失败，可能是参数设置问题。", None, parsed_preview
+                
+                # 4. 拼接并导出
+                final_wave = np.concatenate(audio_segments)
+                tmp_wav = tts_file_name("precision_srt", language=lang)
+                wavfile.write(tmp_wav, sampling_rate, final_wave)
+                
+                return (sampling_rate, final_wave), "SRT 转换配音成功！", tmp_wav, parsed_preview
+                
+                # 4. 拼接并保存最终音频
+                final_wave = np.concatenate(audio_segments)
+                tmp_wav = tts_file_name("srt_dubbing", language=lang)
+                wavfile.write(tmp_wav, sampling_rate, final_wave)
+                
+                return (sampling_rate, final_wave), "SRT 转换配音成功！", tmp_wav, parsed_preview
+
+            # 绑定按钮事件
+            srt_inputs = [srt_file, srt_lang, srt_ns, srt_gs, srt_dn, srt_sp, srt_du, srt_pp, srt_po, 
+                          srt_mode, srt_gender, srt_age, srt_pitch, srt_style, srt_accent, srt_ref]
+            srt_btn.click(
+                process_srt_to_speech,
+                inputs=srt_inputs,
+                outputs=[srt_audio_out, srt_status, srt_out_wav, srt_parsed_text]
+            )
 
         # ==============================================================
         # 4. Voice Design Dictionary / Reference Tab (NEW)
