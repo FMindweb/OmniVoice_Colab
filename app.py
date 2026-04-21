@@ -508,7 +508,7 @@ with gr.Blocks(theme=theme, css=css, title="OmniVoice 多语言演示") as demo:
                 tmp_wav = tts_file_name("dialogue", language=lang)
                 wavfile.write(tmp_wav, sampling_rate, final_wave)
                 
-                c_srt, _, _ = generate_subtitles_if_needed(tmp_wav, lang, subs)
+                c_srt, w_srt, s_srt= generate_subtitles_if_needed(tmp_wav, lang, subs)
                 return (sampling_rate, final_wave), "Dialogue Synthesized Successfully!", tmp_wav, c_srt
 
             md_inputs = [md_text, md_lang, md_want_subs, md_ns, md_gs, md_dn, md_sp, md_du, md_pp, md_po] + role_inputs
