@@ -31,6 +31,25 @@
 
 ---
 
+Based on **Google Colab's free computing power**, this toolbox integrates a deeply optimized TTS engine and Web UI. It is designed to solve common issues in voice cloning such as **slow inference, limited language support, inaccurate polyphone pronunciation, and subtitle misalignment.**
+
+### ✨ Key Features
+* **⚡ 1:1 Real-time Synthesis:** Optimized performance allows for near 1:1 inference speed (e.g., 45s audio in ~40s).
+* **👥 Multi-Character Dialogue:** Supports up to **4 characters** in a single session. Use simple markers (e.g., `1: text`) to simulate scripts.
+* **⏱️ Precise SRT Alignment:** Upload an SRT file, and the AI generates audio perfectly synced to the millisecond timestamps.
+* **🎨 Advanced Voice Design:** Create unique voices by adjusting gender, age, pitch, and style (e.g., whispering).
+* **🔡 Phonetic Precision:** Supports **Pinyin with tones** for Chinese and IPA for English to fix pronunciation errors.
+* **🌍 600+ Languages & Accents:** Supports global languages and various regional Chinese dialects.
+
+### 🛠️ Quick Start
+1. **Open Colab:** Click the [Open In Colab] badge above.
+2. **Save Copy:** Go to `File` -> `Save a copy in Drive` (**Required**).
+3. **Enable T4 GPU:** `Runtime` -> `Change runtime type` -> Select `T4 GPU`.
+4. **Run All:** Click `Runtime` -> `Run all`.
+5. **Access UI:** Wait for setup (~2 min) and click the `public URL` provided in the output.
+
+---
+
 ## 📖 教程与技术支持
 
 * **详细文案版教程**：[FM19.2 Blog - 极速语音克隆指南](https://fm192.blogspot.com/2026/04/google-colab-ai-11.html)
